@@ -130,7 +130,7 @@ class pyDAQmeas():
         # Run the UI
         main.Run()
         main.show()
-        sys.exit(app.exec_())
+        sys.exit(app.exec())
         
         
     def messageHandling(self,stop_event):
@@ -530,7 +530,7 @@ if __name__ == '__main__':
         meas.stop_event = mp.Event()
         
         # Default values for different variables
-        # All of these can be changed from the GUI also
+        # All of these can be changed from the GUI
         meas.therm_calib_name = "None"
         meas.Nsamples = 5000
         meas.sample_rate = 5e4

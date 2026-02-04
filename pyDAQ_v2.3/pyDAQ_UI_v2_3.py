@@ -747,7 +747,7 @@ class realTimeGraph(QtWidgets.QMainWindow):
             msg.setText("File Error")
             msg.setInformativeText('File path missing: select output file')
             msg.setWindowTitle("File Error")
-            msg.exec_()
+            msg.exec()
         else:
             print('File path is ok')
             # Try to clear the file
@@ -799,7 +799,7 @@ class realTimeGraph(QtWidgets.QMainWindow):
             # Write metadata to file
             dg.accepted.connect(self.write_metadata_file)
             dg.rejected.connect(self.metadata_rejected)
-            dg.exec_()
+            dg.exec()
                         
             # Check and initialize file
             self.checkFile()
@@ -1168,7 +1168,7 @@ class realTimeGraph(QtWidgets.QMainWindow):
             dg = DeviceSettingDialog(self.settingDict[channel],paramsfile,channel) #!!! Working here
             # Connect dialog to handler
             dg.accepted.connect(self.handleDeviceSettings)
-            dg.exec_()
+            dg.exec()
         
     def handleDeviceSettings(self,settings):
         '''
@@ -1612,7 +1612,7 @@ def main(q1,q2,qin):
     main.setDataQueue(q1,q2,qin)
     main.Run()
     main.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
    
 
 class DeviceSettingDialog(QtWidgets.QDialog):
