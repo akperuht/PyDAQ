@@ -9,13 +9,13 @@ Warning: still under development
 @author: Aki Ruhtinas, aki.ruhtinas@gmail.com
 """
 import sys
-from pyDAQ_UI_v2 import realTimeGraph
-from DAQcontrol import DAQcontrol
-from instrument_control import *
+from UI.pyDAQ_UI_v2 import realTimeGraph
+from Control_lib.DAQcontrol import DAQcontrol
+from Control_lib.instrument_control import *
 import nidaqmx
 from nidaqmx.constants import AcquisitionType ,LoggingMode, LoggingOperation, WaitMode
 from nidaqmx.stream_readers import AnalogMultiChannelReader
-import thermometer_calib as tc
+import Control_lib.thermometer_calib as tc
 import uuid
 from scipy.signal import *
 from PyQt5 import QtWidgets

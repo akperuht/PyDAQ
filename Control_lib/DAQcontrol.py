@@ -183,10 +183,13 @@ class DAQcontrol():
         out = np.ones((len(self.channels), Nsamples))
         # Log starttime
         t0 = perf_counter()
-        # Create task
+        # Create test data until stop event is set
         while not stop_event.is_set():
-            q.put([perf_counter()-t0,out])
-            # Stop the data acquisition when stop event is set
+            # Create random array
+            rn = 0.2*np.random.rand(len(self.channels), Nsamples)
+
+            q.put([perf_counter()-t0,np.multiply(out,rn)])
+            # Delay to slow down the code
             time.sleep(1e-3)
         print('Data acquisition stopped')
 
