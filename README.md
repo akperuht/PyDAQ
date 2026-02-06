@@ -5,6 +5,8 @@ PyDAQmeas_X_X.py is a GUI for DAQ and hardware control. Data acquisition is desi
 so that all operations run smoothly. However, this may consume all CPU cores in older PC:s. It is possible to change settings of the devices as well as generate measurement metadata using GUI.
 Code takes into account all the settings in real time, thus measurement output can be in real units. Also it is possible to apply thermometer calibration function for currently to one channel.
 
+Device control is realized with JSON files, in order to add new device you only need to construct new JSON file and add it to available devices.
+
 Note:
 Version 2.2 is currently latest stable release tested to work in measurement PC:s. Version 2.2 is using PyQt5 library, and no new features will be added to this version (except for possible bugfixes if I have time).
 Version 2.3 is development version using PySide6 (Qt6). 
