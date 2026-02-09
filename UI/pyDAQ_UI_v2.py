@@ -21,7 +21,7 @@ from functools import partial
 import json
 import uuid
 import pyvisa
-
+from pathlib import Path
         
 class realTimeGraph(QtWidgets.QMainWindow):
     '''
@@ -108,9 +108,10 @@ class realTimeGraph(QtWidgets.QMainWindow):
             self.filepath = 'c:\\'
             
         #!!!
-        self.available_devices = {'AVS-47':'avs47_params.json',
-                                  'Ithaco 1211':'ithaco1211_params.json',
-                                  'Ithaco 1201':'ithaco1201_params.json'
+        current_dir = Path(__file__).resolve().parent
+        self.available_devices = {'AVS-47':current_dir.parent/ 'Control_lib' /'avs47_params.json',
+                                  'Ithaco 1211':current_dir.parent/ 'Control_lib' /'ithaco1211_params.json',
+                                  'Ithaco 1201':current_dir.parent/ 'Control_lib' /'ithaco1201_params.json'
                                   }
         if 'available_devices' in kwargs:
             self.available_devices = kwargs['available_devices']

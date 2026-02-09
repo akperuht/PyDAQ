@@ -275,6 +275,8 @@ def calibration_dipstick(R):
         Calculated temperature
 
     '''       
+    # First clip R to reasonable range
+    R = np.clip(R,40,10000)
     # Compute with numpy piecewise function to increase computation speed
     T= np.piecewise(R, [R>=1030.73, (1030.73 > R) & (R>=143.125), R<143.125],
                     [lambda x:10**np.polynomial.Chebyshev(

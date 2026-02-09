@@ -23,6 +23,7 @@ import numpy as np
 import multiprocessing as mp
 import traceback
 import warnings
+from pathlib import Path
 
 
 class pyDAQmeas():
@@ -92,6 +93,12 @@ class pyDAQmeas():
         self.settingDict = {}
         self.devicelist = {}
         
+        current_dir = Path(__file__).resolve().parent
+        self.available_devices = {'AVS-47':current_dir/ 'Control_lib' /'avs47_params.json',
+                                  'Ithaco 1211':current_dir/ 'Control_lib' /'ithaco1211_params.json',
+                                  'Ithaco 1201':current_dir/ 'Control_lib' /'ithaco1201_params.json'
+                                  }
+        
         
         
     def startPlotting(self):
@@ -120,6 +127,7 @@ class pyDAQmeas():
                      Nsamples = self.Nsamples, 
                      SampleRate = self.sample_rate,
                      available_channels = self.available_channels,
+                     available_devices = self.available_devices,
                      memory_limit = self.memory_limit,
                      rawdataout = self.rawdataout
                      )
@@ -439,8 +447,14 @@ class pyDAQmeas():
             f.write("\n")
         # Start data collection
         
-        # initialize DAQ control class
+        # Initialize DAQ control class
         daq = DAQcontrol(self.channels)
+
+        # Clear data queues:
+        while not self.q0.empty():
+            self.q0.get_nowait()
+        while not self.q3.empty():
+            self.q3.get_nowait()
 
         # Start logging data to multiprocessing queue continuously
         measData = mp.Process(target = daq.continous_Nread,args = (stop_event,self.q0,self.sample_rate, self.Nsamples))
