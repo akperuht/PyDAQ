@@ -6,6 +6,7 @@ Modification of realTimeGraph for simple measurements
 """
 from PySide6 import QtWidgets
 from PySide6 import QtCore,QtGui
+from PySide6.QtCore import Qt,Signal
 from pyqtgraph import PlotWidget, plot
 import pyqtgraph as pg
 import matplotlib.pyplot as plt
@@ -23,7 +24,8 @@ import uuid
 import pyvisa
 from pathlib import Path
 
-        
+
+
 class realTimeGraph(QtWidgets.QMainWindow):
     '''
     Python GUI for fast and efficient real time data plotting
@@ -82,6 +84,8 @@ class realTimeGraph(QtWidgets.QMainWindow):
         
         self.selected_channels_plotted = [i for i in range(self.Nchannel)]
         
+        self.activeDAQinterfaces = []
+        
         # Set data channel names
         self.datalabels=[]
         self.datalabels.append('Time (s)')
@@ -116,6 +120,11 @@ class realTimeGraph(QtWidgets.QMainWindow):
         if 'available_devices' in kwargs:
             self.available_devices = kwargs['available_devices']
             
+        
+        self.available_DAQ_interfaces = ['NI-DAQmx']
+        if 'available_DAQ_interfaces' in kwargs:
+            self.available_DAQ_interfaces = kwargs['available_DAQ_interfaces']
+        
         if 'Nsamples' in kwargs:
             self.dataNsamples = kwargs['Nsamples']
         else:
@@ -207,6 +216,8 @@ class realTimeGraph(QtWidgets.QMainWindow):
         
         self.outputDataViewLabels = []
         self.rawDataViewLabels = []
+        
+        self.N_DAQ_interfaces = 0
     
         
     def createWidgets(self):
@@ -244,6 +255,7 @@ class realTimeGraph(QtWidgets.QMainWindow):
         self.spinNlogginglabel = QtWidgets.QLabel(self)
         self.paramsLabel = QtWidgets.QLabel(self)
         self.pointsLabel = QtWidgets.QLabel(self)
+        self.comboSelectDAQlabel = QtWidgets.QLabel(self)
         self.dataviewLabel = QtWidgets.QLabel(self)
         self.settingsLabel = QtWidgets.QLabel(self)
         self.t_elapsedLabel = QtWidgets.QLabel(self)
@@ -256,11 +268,13 @@ class realTimeGraph(QtWidgets.QMainWindow):
         self.toolmenuChannelsMeasuredLabel = QtWidgets.QLabel(self)
         self.channelParamsLabel = QtWidgets.QLabel(self)
         self.thermometerLabel = QtWidgets.QLabel(self)
+        self.DAQInterfaceLabel = QtWidgets.QLabel(self)
         
         # PushButton
         self.startButton = QtWidgets.QPushButton(self)
         self.selectFileButton = QtWidgets.QPushButton(self)
         self.clearPlotButton = QtWidgets.QPushButton(self)
+        self.addDAQInterfaceButton = LRButton(self)
         
         # Radiobutton
         self.scrollRadio = QtWidgets.QRadioButton(self)
@@ -301,15 +315,15 @@ class realTimeGraph(QtWidgets.QMainWindow):
         self.paramsLayout.addWidget(self.t_elapsedLabel,*(1,0),1,3) 
         self.paramsLayout.addWidget(self.freqLabel,*(2,0),1,3)
         self.paramsLayout.addWidget(self.pointsLabel,*(3,0),1,3)     
-        self.paramsLayout.addWidget(self.spinNsamples,*(4,2),1,1)
-        self.paramsLayout.addWidget(self.spinNsamplesLabel,*(4,0),1,1)
-        self.paramsLayout.addWidget(self.spinSampleRate,*(5,2),1,1)
-        self.paramsLayout.addWidget(self.spinSampleRateLabel,*(5,0),1,1)
-        self.paramsLayout.addWidget(self.spinNlogginglabel,*(6,0),1,1)
-        self.paramsLayout.addWidget(self.spinNlogging,*(6,2),1,1)
-        self.paramsLayout.addWidget(self.toolmenuChannelsMeasuredLabel,*(7,0),1,1)
-        self.paramsLayout.addWidget(self.toolbuttonChannelsMeasured,*(7,2),1,1)
+        self.paramsLayout.addWidget(self.spinNsamples,*(5,2),1,1)
+        self.paramsLayout.addWidget(self.spinNsamplesLabel,*(5,0),1,1)
+        self.paramsLayout.addWidget(self.spinSampleRate,*(6,2),1,1)
+        self.paramsLayout.addWidget(self.spinSampleRateLabel,*(6,0),1,1)
+        self.paramsLayout.addWidget(self.spinNlogginglabel,*(7,0),1,1)
+        self.paramsLayout.addWidget(self.spinNlogging,*(7,2),1,1)
         self.paramsLayout.addWidget(self.startButton,*(8,2),1,1)
+        self.paramsLayout.addWidget(self.DAQInterfaceLabel,*(9,0),1,1)
+        self.paramsLayout.addWidget(self.addDAQInterfaceButton,*(9,2),1,1)
         
         
         # Add widgets to channelParamsLayout
@@ -495,7 +509,6 @@ class realTimeGraph(QtWidgets.QMainWindow):
         self.comboThermType.setStyleSheet(self.style)
         self.comboThermCh.setStyleSheet(self.style)
     
-    
         # Configure start button
         self.startButton.setStyleSheet(self.bstyle_start)   
         self.startButton.setText('Start')
@@ -506,6 +519,12 @@ class realTimeGraph(QtWidgets.QMainWindow):
         self.clearPlotButton.setStyleSheet(self.bstyle_settingsbutton)
         self.clearPlotButton.setText('Clear Plot')
         self.clearPlotButton.clicked.connect(self.clearPlot)
+        
+        #Configure add DAQ button
+        self.addDAQInterfaceButton.setText('Add DAQ')
+        self.addDAQInterfaceButton.setStyleSheet(self.bstyle_settingsbutton)
+        self.addDAQInterfaceButton.clicked.connect(self.addDAQInterface)
+        self.addDAQInterfaceButton.rightClicked.connect(self.removeDAQInterface)
     
         # Create channel selectors
         self.createChannelSelector('measured')
@@ -552,12 +571,13 @@ class realTimeGraph(QtWidgets.QMainWindow):
                   self.toolmenuChannelsMeasuredLabel,
                   self.comboThermChLabel,
                   self.thermometerLabel,
-                  self.channelParamsLabel
+                  self.channelParamsLabel,
+                  self.DAQInterfaceLabel
                   ]
         
         texts=['X axis data ',
                'Y axis data ',
-               'Data collection',
+               'Data acquisition',
                'Number of points: ',
                'Data output',
                'Plot settings',
@@ -574,7 +594,8 @@ class realTimeGraph(QtWidgets.QMainWindow):
                'Channels to measure',
                'Channel',
                'Thermometer',
-               'Channel settings'
+               'Channel settings',
+               'DAQ interfaces'
                ]
         
         # Big font size
@@ -593,7 +614,7 @@ class realTimeGraph(QtWidgets.QMainWindow):
                 l.setFrameStyle(QtWidgets.QFrame.Panel| QtWidgets.QFrame.Sunken)
             if j in [10,15,17]:
                 l.setFont(QtGui.QFont('Arial', 10))
-            if j in [4]:
+            if j in [4,20]:
                 l.setStyleSheet('QLabel {color: black;padding-bottom: 10px;}')
                 l.setFont(QtGui.QFont('Arial', self.bigfs,weight=QtGui.QFont.Bold))
             j+=1
@@ -883,6 +904,100 @@ class realTimeGraph(QtWidgets.QMainWindow):
             yaml.dump(dt, file, sort_keys=False)
         
         
+    def removeDAQInterface(self):
+        '''
+        Removes DAQ interfaces
+
+        Returns
+        -------
+        None.
+
+        '''
+        if self.N_DAQ_interfaces>0:
+            self.addDAQInterfaces(self.N_DAQ_interfaces-1)
+
+            
+    def addDAQInterface(self):
+        '''
+        Add DAQ interface
+
+        Returns
+        -------
+        None.
+
+        '''
+        if self.N_DAQ_interfaces<5:
+            self.addDAQInterfaces(self.N_DAQ_interfaces+1)
+        else:
+            msg = QtWidgets.QMessageBox()
+            msg.setIcon(QtWidgets.QMessageBox.Critical)
+            msg.setText("Maximum number of DAQ interfaces reached")
+            msg.setWindowTitle("File Error")
+            msg.exec()
+        
+    def addDAQInterfaces(self,N):
+        '''
+        Method to add N DAQ interfaces to be measured
+
+        Parameters
+        ----------
+        N : int
+            Number of DAQ interfaces in use
+
+        Returns
+        -------
+        None.
+
+        '''
+        if self.N_DAQ_interfaces>0:
+            # Clear previous interfaces
+            for i,k in enumerate(reversed(range(self.paramsLayout.count()))):
+                if i<2*self.N_DAQ_interfaces+1:
+                    wdg = self.paramsLayout.takeAt(k).widget()
+                    wdg.deleteLater()
+        
+        
+        self.DAQComboList = {}
+        self.DAQSettingsButtonList = {}
+        
+        self.N_DAQ_interfaces = N
+        
+        i = 11
+        for chi in range(N):
+           
+            # Create comboboxes
+            comboDAQ = QtWidgets.QComboBox(self)
+            comboDAQ.addItems(self.available_DAQ_interfaces)
+            comboDAQ.setStyleSheet(self.style)
+            comboDAQ.activated.connect(lambda index,chi=chi: self.DAQInterfaceComboClicked(chi, index))
+            
+            # Create pushButtons
+            DAQSettingsButton = QtWidgets.QPushButton(self)
+            # Configure button style 
+            DAQSettingsButton.setStyleSheet(self.bstyle_settingsbutton)
+            DAQSettingsButton.setText('Settings')
+            # Connect to same function but communicate which button is pressed using partial
+            DAQSettingsButton.clicked.connect(partial(self.DAQSettingButtonClicked,chi))
+            # Create horizontal separator
+            self.hline = QHLine()
+            
+             # Add widgets to layout
+            self.paramsLayout.addWidget(self.hline, i, 0, 1, 3) 
+            self.paramsLayout.addWidget(comboDAQ,*(i+1,0),1,1)
+            self.paramsLayout.addWidget(DAQSettingsButton,*(i+1,2),1,1)
+            
+            # Add objects to dict
+            self.DAQComboList[chi] = comboDAQ
+            self.DAQSettingsButtonList[chi] = DAQSettingsButton
+            i+=2
+       
+       
+    def DAQSettingButtonClicked(self,chi):
+        print('TODO')
+        
+    def DAQInterfaceComboClicked(self,chi,index):
+        print('TODO')
+       
     
     def changeVisibility(self):
         '''
@@ -1749,7 +1864,7 @@ class DeviceSettingDialog(QtWidgets.QDialog):
         values = {'Channel':self.channel,'Multiplier':multip,'Settings': settings}
         self.accepted.emit(values)
         self.accept()
-    
+       
 
 class MetadataDialog(QtWidgets.QDialog):
     '''
@@ -1845,6 +1960,21 @@ class MetadataDialog(QtWidgets.QDialog):
                   }
         self.accepted.emit(values)
         self.accept()
+        
+        
+class LRButton(QtWidgets.QPushButton):
+    '''
+    Modification of PushButton to accept right clicks
+    '''
+    rightClicked = Signal()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.RightButton:
+            self.rightClicked.emit()
+            return
+
+        super().mousePressEvent(event)
+        
 
 def addData(q1,q2,pipe):
     '''

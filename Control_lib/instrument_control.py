@@ -22,6 +22,7 @@ import datetime
 from nidaqmx.stream_writers import DigitalSingleChannelWriter
 from pymeasure.instruments.keithley import Keithley2450
 from pymeasure.instruments.keithley import Keithley6221
+from pymeasure.instruments.srs import SR860
 import yaml
 import warnings
 
@@ -2527,7 +2528,42 @@ class Anritsu68367C():
         
         msg = 'CF' + str(self.ch_no) + ' ' + str(freq) + unit
         self.instr_gpib.write(msg)
+
     
+
+class SR860_lockin(SR860):
+    '''
+    Class to control SRS SR860 lock-in amplifier via GPIB/ethernet. 
+    Inherits class pymeasure.instruments.srs.SR860,
+    and adds some useful functions 
+    
+    Documentation for the pymeasure part can be found from:
+    https://pymeasure.readthedocs.io/en/latest/api/instruments/srs/sr860.html
+    '''
+    def __init__(self,address):
+        '''
+        Creates new Keithley_2450 class that inherits class Keithley2450 
+
+        Parameters
+        ----------
+        gpib_id : string
+            GPIB adress for given instrument
+        instr_number : int
+            Number of the instrument for future referencing
+        Returns
+        -------
+        None.
+
+        '''
+        self.rm=visa.ResourceManager()
+        # Create new GPIB resource
+        self.instr_gpib = self.rm.open_resource(gpib_id)
+        # check resource id
+        self.instr_id = self.instr_gpib.query("*IDN?")
+        print('Lock-in amplifier online. device ID:',self.instr_id)
+
+
+
 
 '''
 =========================================================================================================================
