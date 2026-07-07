@@ -10,7 +10,7 @@ Warning: still under development
 """
 import sys
 from pyDAQ_UI_v1 import realTimeGraph
-from DAQcontrol import *
+from NiDAQmx_control import *
 from instrument_control import *
 from thermometer_calib import *
 import nidaqmx

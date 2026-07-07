@@ -4,6 +4,8 @@ Modification of realTimeGraph for simple measurements
 
 @author: Aki Ruhtinas
 """
+import os
+os.environ["QT_API"] = "pyside6"
 from PySide6 import QtWidgets
 from PySide6 import QtCore,QtGui
 from pyqtgraph import PlotWidget, plot

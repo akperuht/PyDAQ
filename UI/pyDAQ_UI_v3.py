@@ -84,7 +84,7 @@ class realTimeGraph(QtWidgets.QMainWindow):
         
         self.selected_channels_plotted = [i for i in range(self.Nchannel)]
         
-        self.activeDAQinterfaces = []
+        self.activeDAQinterfaces = {}
         
         # Set data channel names
         self.datalabels=[]
@@ -115,13 +115,19 @@ class realTimeGraph(QtWidgets.QMainWindow):
         current_dir = Path(__file__).resolve().parent
         self.available_devices = {'AVS-47':current_dir.parent/ 'Control_lib' /'avs47_params.json',
                                   'Ithaco 1211':current_dir.parent/ 'Control_lib' /'ithaco1211_params.json',
-                                  'Ithaco 1201':current_dir.parent/ 'Control_lib' /'ithaco1201_params.json'
+                                  'Ithaco 1201':current_dir.parent/ 'Control_lib' /'ithaco1201_params.json',
+                                  'Basel SP983c':current_dir.parent/ 'Control_lib' /'basel_SP983c_params.json',
+                                  'Basel SP1004':current_dir.parent/ 'Control_lib' /'basel_SP1004_params.json',
                                   }
         if 'available_devices' in kwargs:
             self.available_devices = kwargs['available_devices']
             
         
-        self.available_DAQ_interfaces = ['NI-DAQmx']
+        self.available_DAQ_interfaces = {'Ni-DAQ':current_dir.parent/ 'Control_lib' /'nidaqmx_daq_params.json',
+                            'AVS-47':current_dir.parent/ 'Control_lib' /'avs47_params.json',
+                            'SRS SR860':current_dir.parent/ 'Control_lib' /'sr860_params.json',
+                            'Moku Go':current_dir.parent/ 'Control_lib' /'mokugo_daq_params.json',
+                            }
         if 'available_DAQ_interfaces' in kwargs:
             self.available_DAQ_interfaces = kwargs['available_DAQ_interfaces']
         
@@ -218,7 +224,10 @@ class realTimeGraph(QtWidgets.QMainWindow):
         self.rawDataViewLabels = []
         
         self.N_DAQ_interfaces = 0
-    
+        self.DAQ_interfaces = {}
+
+        self.DAQsettingDict = {}
+        self.measured_channels = {}
         
     def createWidgets(self):
         '''
@@ -315,10 +324,10 @@ class realTimeGraph(QtWidgets.QMainWindow):
         self.paramsLayout.addWidget(self.t_elapsedLabel,*(1,0),1,3) 
         self.paramsLayout.addWidget(self.freqLabel,*(2,0),1,3)
         self.paramsLayout.addWidget(self.pointsLabel,*(3,0),1,3)     
-        self.paramsLayout.addWidget(self.spinNsamples,*(5,2),1,1)
-        self.paramsLayout.addWidget(self.spinNsamplesLabel,*(5,0),1,1)
-        self.paramsLayout.addWidget(self.spinSampleRate,*(6,2),1,1)
-        self.paramsLayout.addWidget(self.spinSampleRateLabel,*(6,0),1,1)
+        #self.paramsLayout.addWidget(self.spinNsamples,*(5,2),1,1)
+        #self.paramsLayout.addWidget(self.spinNsamplesLabel,*(5,0),1,1)
+        #.paramsLayout.addWidget(self.spinSampleRate,*(6,2),1,1)
+        #self.paramsLayout.addWidget(self.spinSampleRateLabel,*(6,0),1,1)
         self.paramsLayout.addWidget(self.spinNlogginglabel,*(7,0),1,1)
         self.paramsLayout.addWidget(self.spinNlogging,*(7,2),1,1)
         self.paramsLayout.addWidget(self.startButton,*(8,2),1,1)
@@ -374,10 +383,11 @@ class realTimeGraph(QtWidgets.QMainWindow):
         
         # Add layouts to main layout
         self.layout1.addWidget(self.win)
-        self.layout2.addWidget(self.paramsFrame)
-        self.layout2.addWidget(self.settingsFrame)
 
-        self.layout3.addWidget(self.channelParamsFrame)
+        self.layout2.addWidget(self.paramsFrame)
+        self.layout2.addWidget(self.channelParamsFrame)
+
+        self.layout3.addWidget(self.settingsFrame)
         self.layout3.addWidget(self.dataviewFrame)
         
         self.layout3.addStretch()
@@ -739,14 +749,9 @@ class realTimeGraph(QtWidgets.QMainWindow):
             self.actionChsm[0].setChecked(True)
             self.toolbuttonChannelsMeasured.setMenu(self.toolmenuChannelsMeasured)
             self.toolbuttonChannelsMeasured.setPopupMode(QtWidgets.QToolButton.MenuButtonPopup)
-            self.toolmenuChannelsMeasured.aboutToHide.connect(self.channelMenuMeasuredClicked)
+            #self.toolmenuChannelsMeasured.aboutToHide.connect(self.channelMenuMeasuredClicked)
             
-            # Set first 3 channels checked by default
-            '''
-            self.measCh_checkboxes[0].setChecked(True)
-            self.measCh_checkboxes[1].setChecked(True)
-            self.measCh_checkboxes[2].setChecked(True)
-            '''
+
         else:
             pass
         
@@ -817,7 +822,8 @@ class realTimeGraph(QtWidgets.QMainWindow):
             self.uuid = uuid.uuid4()
                       
             # Open Dialog window to ask metadata
-            dg = MetadataDialog(self.selected_channels_measured,self.settingDict,self.available_devices)
+            dg = MetadataDialog(self.selected_channels_measured,self.settingDict,
+                                self.DAQsettingDict,self.available_devices)
             # Write metadata to file
             dg.accepted.connect(self.write_metadata_file)
             dg.rejected.connect(self.metadata_rejected)
@@ -884,7 +890,8 @@ class realTimeGraph(QtWidgets.QMainWindow):
                   'Measurement description': values['Description'],
                   'Datafile format':f'Time(s) + Processed data channels ({len(chdict)}) + raw data channels ({len(chdict)})',
                   'Channel names': chdict,
-                  'Settings':self.settingDict
+                  'Settings':self.settingDict,
+                  'DAQ settings':self.DAQsettingDict
                   }
         else:
             dt = {'UUID':str(self.uuid),
@@ -895,7 +902,8 @@ class realTimeGraph(QtWidgets.QMainWindow):
                   'Measurement description': values['Description'],
                   'Datafile format':f'Time(s) + Processed data channels ({len(chdict)})',
                   'Channel names': chdict,
-                  'Settings':self.settingDict
+                  'Settings':self.settingDict,
+                  'DAQ settings':self.DAQsettingDict
                   }  
         # Write same filename as measurement name
         fname = self.fname + '.yaml'
@@ -986,19 +994,109 @@ class realTimeGraph(QtWidgets.QMainWindow):
             self.paramsLayout.addWidget(comboDAQ,*(i+1,0),1,1)
             self.paramsLayout.addWidget(DAQSettingsButton,*(i+1,2),1,1)
             
+            self.DAQsettingDict[chi] = {}
+
             # Add objects to dict
             self.DAQComboList[chi] = comboDAQ
             self.DAQSettingsButtonList[chi] = DAQSettingsButton
             i+=2
        
-       
     def DAQSettingButtonClicked(self,chi):
-        print('TODO')
+        '''
+        Handle event when DAQ settings button is clicked
+        '''
+
+        dev = self.DAQComboList[chi].currentText()
+        paramsfile = self.available_DAQ_interfaces[dev]
+        self.DAQ_interfaces[chi] = dev
+        dg = DAQSettingDialog(self.DAQsettingDict[chi],paramsfile,chi) #!!! Working here
+        # Connect dialog to handler
+        dg.accepted.connect(self.handleDAQSettings)
+        dg.exec()
+        
+        
         
     def DAQInterfaceComboClicked(self,chi,index):
-        print('TODO')
-       
+        '''
+        Handle event when DAQ interfaces is changed
+
+        Parameters
+        ----------
+        chi : int
+            channel number
+        index : int
+            DAQ interface number
+
+        Returns
+        -------
+        None.
+        '''
+        dev = self.DAQComboList[chi].currentText()
+        self.DAQ_interfaces[chi] = dev
+
+
+    def handleDAQSettings(self, settings):
+        '''
+        Handle event when DAQ settings are changed
+
+        Parameters
+        ----------
+        values : dict
+            Dictionary containing the new settings
+
+        Returns
+        -------
+        None.
     
+        '''
+        # Update the settingDict with the new values
+        # Update settings to setting dictionary
+        daqch = settings['Channel']
+        self.DAQsettingDict[daqch]['Settings'] = settings['Settings']
+
+        # Add measured channels to dictionary
+        self.measured_channels[daqch] = self.DAQsettingDict[daqch]['Settings']['Channels']
+
+        # Update list of measured channels
+        self.selected_channels_measured = []
+        for chi in self.measured_channels.values():
+            for chii in chi:
+                self.selected_channels_measured.append(f'{daqch}:{chii}')
+
+
+        # Update settings to measurement thread
+        self.qout.put({'DAQSettingDict':settings})
+        self.qout.put({'DAQinterfaces':self.DAQ_interfaces})
+
+        self.Nchannel = len(self.selected_channels_measured)
+            
+        # Communicate measured channels to measurement program
+        self.qout.put({'measChannels':self.selected_channels_measured})
+        self.qout.put({'measChannelsIndices':self.selected_channels_measured_index})
+        
+        # Initialize data
+        self.data = [[] for y in range(self.Nchannel+1)]
+        
+        # Change combobox lists for mainplot
+        self.combo_list = ['Time(s)']+[chi for chi in self.selected_channels_measured]
+        self.setupComboXY()
+        
+        self.toolmenuChannelsPlotted.clear()
+        # Add different channels to toolbutton
+        self.actionChsp = []
+        for i,chi in enumerate(self.selected_channels_measured):
+            self.actionChsp.append(self.toolmenuChannelsPlotted.addAction(chi))
+            self.actionChsp[-1].setCheckable(True)
+            self.actionChsp[-1].checked = True
+            
+        # Clear and set temperature channel combobox
+        self.comboThermCh.clear()
+        self.comboThermCh.addItems(self.selected_channels_measured)
+        
+        # Make channel setting tab and dataview tab
+        self.createChannelSettings()
+        self.createDataMonitorLabels()
+        
     def changeVisibility(self):
         '''
         Method to enable/disable different widgets depending on whether or not the program is running
@@ -1025,56 +1123,6 @@ class realTimeGraph(QtWidgets.QMainWindow):
             self.spinNsamples.setEnabled(True)
             self.comboThermCh.setEnabled(True)
                 
-          
-
-        
-    def channelMenuMeasuredClicked(self,update_ch_sett=True):
-        '''
-        Handler to select which of the available channels are measured
-
-        Returns
-        -------
-        None.
-
-        '''
-        self.selected_channels_measured_index = []
-        self.selected_channels_measured = []
-        
-        # Get channels names for all the selected channels
-        for i,measchb in enumerate(self.actionChsm):
-            if measchb.isChecked():
-                self.selected_channels_measured.append(measchb.text())
-                self.selected_channels_measured_index.append(i)
-                
-        self.Nchannel = len(self.selected_channels_measured)
-            
-        # Communicate measured channels to measurement program
-        self.qout.put({'measChannels':self.selected_channels_measured})
-        self.qout.put({'measChannelsIndices':self.selected_channels_measured_index})
-        
-        # Initialize data
-        self.data = [ [] for y in range(self.Nchannel+1)]
-        
-        # Change combobox lists for mainplot
-        self.combo_list = ['Time(s)']+[chi for chi in self.selected_channels_measured]
-        self.setupComboXY()
-        
-        self.toolmenuChannelsPlotted.clear()
-        # Add different channels to toolbutton
-        self.actionChsp = []
-        for i,chi in enumerate(self.selected_channels_measured):
-            self.actionChsp.append(self.toolmenuChannelsPlotted.addAction(chi))
-            self.actionChsp[-1].setCheckable(True)
-            self.actionChsp[-1].checked = True
-            
-        # Clear and set temperature channel combobox
-        self.comboThermCh.clear()
-        self.comboThermCh.addItems(self.selected_channels_measured)
-        
-        # Make channel setting tab and dataview tab
-        if update_ch_sett:
-            self.createChannelSettings()
-            self.createDataMonitorLabels()
         
         
         
@@ -1583,7 +1631,8 @@ class realTimeGraph(QtWidgets.QMainWindow):
                 sys.exit()
         except Exception:
             # Print full traceback for easier debugging
-            traceback.print_exc()
+            #traceback.print_exc()
+            pass
          
     def clearPlot(self):
         '''
@@ -1864,7 +1913,195 @@ class DeviceSettingDialog(QtWidgets.QDialog):
         values = {'Channel':self.channel,'Multiplier':multip,'Settings': settings}
         self.accepted.emit(values)
         self.accept()
-       
+
+
+class DAQSettingDialog(QtWidgets.QDialog):
+    '''
+    Class for asking device settings for the experiment
+    '''
+    # Communicate dialog data via pyqtSignal
+    accepted = QtCore.Signal(dict) #!!! Working also here
+
+    def __init__(self,settings,paramsfile,channel,parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Device settings")
+        
+        # Set input dialog stylesheet
+        self.setStyleSheet( "background-color:rgb(25, 35, 45);color:white")
+        # Set stylesheets
+        self.combostyle = """QComboBox { 
+            background-color: rgb(43, 61, 79);
+            selection-background-color: gray; 
+            color : white; 
+            border: 1px solid black; 
+            padding :4px;
+            selection-color:cyan;
+            font-family: Arial;
+            font-size:15 pt;
+            }
+            QComboBox::hover {
+            background-color: rgb(55, 79, 102);
+                }
+            QListView{
+            background-color: rgb(57, 68, 79);
+            border: 1px solid black; 
+            }
+                """
+        
+        
+        
+        self.channel = channel
+        self.settings = settings
+        
+        # Get available visa resources
+        resm = pyvisa.ResourceManager()
+        self.visa_list = resm.list_resources()
+        
+                
+        # Create form
+        form = QtWidgets.QFormLayout(self)
+        # Open JSON file
+        with open(paramsfile) as jf:
+            paramsdict = json.load(jf)
+        # Add controls corresponding to keys in paramsdict
+        self.combo = {}
+        self.linee = {}
+        self.spin = {}
+        self.listwgs = {}
+        self.ps = paramsdict['Settings']
+        for key in self.ps:
+            # Check if key is meant to be shown in dialog
+            if self.ps[key]['toDialog']:
+                # Check key type
+                if self.ps[key]['type'] == 'QComboBox':
+                    # Create combobox
+                    combo_i = QtWidgets.QComboBox(self)
+                    # Add all available values to combobox, handle GPIB channels differently
+                    if key == 'GPIB channel':
+                        combo_i.addItems(self.visa_list)
+                    else:
+                        combo_i.addItems([str(vi) for vi in self.ps[key]['values']])
+                    # Set stylesheet
+                    combo_i.setStyleSheet(self.combostyle)
+                    # Set index to default or already applied value
+                    try:
+                        # Try to get current value
+                        current_value = self.settings['Settings'][key]
+                    except Exception as e:
+                        # Fall back to default if no current value is set
+                        current_value = self.ps[key]['default']
+                    try:
+                        if key == 'GPIB channel':
+                            combo_i.setCurrentIndex(self.visa_list.index(current_value))
+                        else:
+                            combo_i.setCurrentIndex(self.ps[key]['values'].index(current_value))
+                    except:
+                        # Fall back to first index
+                        combo_i.setCurrentIndex(0)
+                    # Add combobox to list of comboboxes
+                    self.combo[key] = combo_i
+                    # Add to form
+                    form.addRow(key, combo_i)
+                # Create QLineEdit for string values
+                elif self.ps[key]['type'] == 'QLineEdit':
+                    # Create line edit
+                    linee_i = QtWidgets.QLineEdit(self)
+                    # Set default value
+                    linee_i.setText(self.ps[key]['default'])
+                    # Add Line edit to list
+                    self.linee[key] = linee_i
+                    form.addRow(key, linee_i)         
+                # Create QSpinBox for integer values       
+                elif self.ps[key]['type'] == 'QSpinBox':
+                    try:
+                        # Try to get current value
+                        current_value = self.settings['Settings'][key]
+                    except Exception as e:
+                        # Fall back to default if no current value is set
+                        current_value = self.ps[key]['default']
+                    spin_i = QtWidgets.QSpinBox(self)
+                    # Set range and default value
+                    spin_i.setRange(self.ps[key]['minimum'], self.ps[key]['maximum'])
+                    spin_i.setValue(current_value)
+                    # Add Spin box to list
+                    self.spin[key] = spin_i
+                    form.addRow(key, spin_i)
+                # Create QListWidget for multiple selection
+                elif self.ps[key]['type'] == 'QListWidget':
+                    listwg = QtWidgets.QListWidget(self)
+                    try:
+                        # Try to get current value
+                        current_value = self.settings['Settings'][key]
+                    except Exception as e:
+                        # Fall back to default if no current value is set
+                        current_value = self.ps[key]['default']
+                    for val in self.ps[key]['values']:
+                        item = QtWidgets.QListWidgetItem(val)
+                        # Try to remember the state
+                        if val in current_value:
+                            item.setCheckState(Qt.Checked)
+                        else:
+                            item.setCheckState(Qt.Unchecked)
+                        listwg.addItem(item)
+                    self.listwgs[key] = listwg
+                    # Restrict height
+                    height = (listwg.sizeHintForRow(0) * listwg.count() + 2 * listwg.frameWidth())
+                    listwg.setFixedHeight(height)
+                    form.addRow(key, listwg)
+                else:
+                    pass
+        self.btn = QtWidgets.QPushButton('OK')
+        self.btn.clicked.connect(self.ok_pressed)
+        form.addRow(self.btn)
+
+    def ok_pressed(self):
+        '''
+        Handles event when ok button is pressed in the dialog
+
+        Returns
+        -------
+        None.
+
+        '''
+        # Get settings from dialog
+        settings = {}
+        multip = 1
+        # Iterate over the keys in setting dictionary
+        for key in self.ps:
+            # Take values only if values can be changed in dialog
+            if self.ps[key]['toDialog']:
+                # Extract values from comboboxes
+                if self.ps[key]['type'] == 'QComboBox':
+                    # Get current setting
+                    if key == 'GPIB channel':
+                        try:
+                            ic = self.combo[key].currentIndex()
+                        except:
+                            ic = 0
+                        val = self.visa_list[ic]
+                    else:
+                        ic = self.combo[key].currentIndex()
+                        val = self.ps[key]['values'][ic]
+                    settings[key] = val
+                elif self.ps[key]['type'] == 'QLineEdit':
+                    val = self.linee[key].text()
+                    settings[key] = val
+                elif self.ps[key]['type'] == 'QSpinBox':
+                    val = self.spin[key].value()
+                    settings[key] = val
+                elif self.ps[key]['type'] == 'QListWidget':
+                    checked = []
+                    for i in range(self.listwgs[key].count()):
+                        item = self.listwgs[key].item(i)
+                        if item.checkState() == Qt.Checked:
+                            checked.append(item.text())
+                    settings[key] = checked
+            # Take default value
+            else:
+                settings[key] = self.ps[key]['default']
+        values = {'Channel':self.channel,'Settings': settings}
+        self.accepted.emit(values)
+        self.accept()
 
 class MetadataDialog(QtWidgets.QDialog):
     '''
@@ -1872,7 +2109,7 @@ class MetadataDialog(QtWidgets.QDialog):
     '''
     accepted = QtCore.Signal(dict)
 
-    def __init__(self, measChannels,settingDict, available_devices, parent=None):
+    def __init__(self, measChannels,settingDict,daqsettingdict, available_devices, parent=None):
         super().__init__(parent)
         # Set up controls
         self.setWindowTitle("Measurement metadata")
@@ -1999,8 +2236,8 @@ if __name__ == '__main__':
     q1 = mp.Queue()
     q2 = mp.Queue()
     qin = mp.Queue()
-    worker = mp.Process(target=addData, args=(q1,q2,qin))
-    worker.start()
+    #worker = mp.Process(target=addData, args=(q1,q2,qin))
+    #worker.start()
     main(q1,q2,qin)
     
         

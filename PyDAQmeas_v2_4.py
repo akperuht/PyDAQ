@@ -10,7 +10,7 @@ Warning: still under development
 """
 import sys
 from UI.pyDAQ_UI_v2_3 import realTimeGraph
-from Control_lib.NiDAQmx_control import DAQcontrol
+from Control_lib.DAQ_lib import DAQcontrol
 from Control_lib.instrument_control import *
 import nidaqmx
 from nidaqmx.constants import AcquisitionType ,LoggingMode, LoggingOperation, WaitMode
@@ -446,8 +446,18 @@ class pyDAQmeas():
         if self.testmode:
             print('Testing mode on, no data acquisition')
             measData = mp.Process(target = daq.continous_Nread_test,args = (stop_event,self.q0,self.sample_rate, self.Nsamples))
+        
+        elif self.daq_device_name == 'MokuGo': #stop_event,q,sample_rate, Nsamples,address,maxduration = 86400
+            measData = mp.Process(target = daq.continous_Nread,args = (stop_event,
+                                                                       self.q0,
+                                                                       self.sample_rate,
+                                                                       self.Nsamples,
+                                                                       self.moku_go_ip))       
         else:
-            measData = mp.Process(target = daq.continous_Nread,args = (stop_event,self.q0,self.sample_rate, self.Nsamples))
+            measData = mp.Process(target = daq.continous_Nread,args = (stop_event,
+                                                                       self.q0,
+                                                                       self.sample_rate,
+                                                                       self.Nsamples))
         measData.start()
         print('Data logging started')
         # Start processing thread
@@ -514,7 +524,7 @@ if __name__ == '__main__':
         meas = pyDAQmeas()
         # Device name, change if needed
         #meas.daq_device_name = 'Dev1'
-        meas.daq_device_name = 'Dev1'
+        meas.daq_device_name = 'MokuGo'
         
         meas.testmode = True
 
@@ -529,6 +539,8 @@ if __name__ == '__main__':
         meas.rawdataout = True
         
         meas.stop_event = mp.Event()
+        
+        meas.moku_go_ip = r'fe80::7269:79ff:feb9:7b5e%21'
         
         # Default values for different variables
         # All of these can be changed from the GUI

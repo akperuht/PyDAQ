@@ -1,0 +1,211 @@
+{
+    "Device": "SRS SR860 DSP Lock-in Amplifier",
+    "Settings": {
+        "Device": {
+            "toDialog": false,
+            "default": "SR860",
+            "description": "Stanford Research Systems SR860 Lock-in Amplifier"
+        },
+        "Remote": {
+            "toDialog": false,
+            "default": true
+        },
+        "Communication interface": {
+            "toDialog": true,
+            "default": "GPIB",
+            "values": [
+                "GPIB",
+                "Ethernet",
+                "USB-TMC",
+                "RS-232"
+            ],
+            "type": "QComboBox"
+        },
+        "Resource": {
+            "toDialog": true,
+            "default": "GPIB0::8::INSTR",
+            "description": "PyVISA resource string",
+            "type": "QLineEdit"
+        },
+        "Reference source": {
+            "toDialog": true,
+            "default": "External",
+            "values": [
+                "Internal",
+                "External",
+                "Dual",
+                "Chop"
+            ],
+            "type": "QComboBox"
+        },
+        "Demodulation frequency [Hz]": {
+            "toDialog": true,
+            "default": 17.3,
+            "type": "QDoubleSpinBox",
+            "minimum": 0.001,
+            "maximum": 500000
+        },
+        "Harmonic": {
+            "toDialog": true,
+            "default": 1,
+            "type": "QSpinBox",
+            "minimum": 1,
+            "maximum": 99
+        },
+        "Sensitivity": {
+            "toDialog": true,
+            "default": "100 uV",
+            "values": [
+                "1 nV",
+                "2 nV",
+                "5 nV",
+                "10 nV",
+                "20 nV",
+                "50 nV",
+                "100 nV",
+                "200 nV",
+                "500 nV",
+                "1 uV",
+                "2 uV",
+                "5 uV",
+                "10 uV",
+                "20 uV",
+                "50 uV",
+                "100 uV",
+                "200 uV",
+                "500 uV",
+                "1 mV",
+                "2 mV",
+                "5 mV",
+                "10 mV",
+                "20 mV",
+                "50 mV",
+                "100 mV",
+                "200 mV",
+                "500 mV",
+                "1 V"
+            ],
+            "type": "QComboBox"
+        },
+        "Input range": {
+            "toDialog": true,
+            "default": "100 mV",
+            "values": [
+                "10 mV",
+                "30 mV",
+                "100 mV",
+                "300 mV",
+                "1 V"
+            ],
+            "type": "QComboBox"
+        },
+        "Time constant": {
+            "toDialog": true,
+            "default": "100 ms",
+            "values": [
+                "1 us",
+                "3 us",
+                "10 us",
+                "30 us",
+                "100 us",
+                "300 us",
+                "1 ms",
+                "3 ms",
+                "10 ms",
+                "30 ms",
+                "100 ms",
+                "300 ms",
+                "1 s",
+                "3 s",
+                "10 s",
+                "30 s",
+                "100 s",
+                "300 s",
+                "1 ks",
+                "3 ks",
+                "10 ks",
+                "30 ks"
+            ],
+            "type": "QComboBox"
+        },
+        "Filter slope": {
+            "toDialog": true,
+            "default": "24 dB/oct",
+            "values": [
+                "6 dB/oct",
+                "12 dB/oct",
+                "18 dB/oct",
+                "24 dB/oct"
+            ],
+            "type": "QComboBox"
+        },
+        "Synchronous filter": {
+            "toDialog": true,
+            "default": false,
+            "type": "QCheckBox"
+        },
+        "Outputs to acquire": {
+            "toDialog": true,
+            "default": [
+                "X",
+                "Y"
+            ],
+            "values": [
+                "X",
+                "Y",
+                "R",
+                "Theta",
+                "X noise",
+                "Y noise",
+                "Aux In 1",
+                "Aux In 2",
+                "Aux In 3",
+                "Aux In 4",
+                "Reference Frequency",
+                "Reference Phase"
+            ],
+            "type": "QListWidget"
+        },
+        "Acquisition mode": {
+            "toDialog": true,
+            "default": "Streaming",
+            "values": [
+                "Single Read",
+                "Data Transfer",
+                "Capture Buffer",
+                "Streaming"
+            ],
+            "type": "QComboBox"
+        },
+        "Sample rate [Hz]": {
+            "toDialog": true,
+            "default": 1000,
+            "type": "QSpinBox",
+            "minimum": 1,
+            "maximum": 1250000
+        },
+        "Capture length [samples]": {
+            "toDialog": true,
+            "default": 10000,
+            "type": "QSpinBox",
+            "minimum": 1,
+            "maximum": 1000000
+        },
+        "Auto sensitivity": {
+            "toDialog": true,
+            "default": false,
+            "type": "QCheckBox"
+        },
+        "Auto phase": {
+            "toDialog": true,
+            "default": false,
+            "type": "QCheckBox"
+        },
+        "Output unit": {
+            "toDialog": false,
+            "default": "Voltage",
+            "values": [],
+            "type": "QComboBox"
+        }
+    }
+}

@@ -10,7 +10,7 @@ Warning: still under development
 """
 import sys
 from UI.pyDAQ_UI_v2 import realTimeGraph
-from Control_lib.DAQcontrol import DAQcontrol
+from Control_lib.NiDAQmx_control import DAQcontrol
 from Control_lib.instrument_control import *
 import nidaqmx
 from nidaqmx.constants import AcquisitionType ,LoggingMode, LoggingOperation, WaitMode

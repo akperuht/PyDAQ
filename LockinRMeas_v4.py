@@ -12,7 +12,7 @@ sys.path.append(r'C:\Users\akperuht\Nextcloud\Private\Python')
 #sys.path.append(r'C:\Users\akperuht\Nextcloud2\Python')
 
 from pymodules.realTimeGraph_v6 import realTimeGraph
-from pymodules.DAQcontrol import *
+from pymodules.NiDAQmx_control import *
 from pymodules.instrument_control import *
 from pymodules.thermometer_calib import *
 import uuid

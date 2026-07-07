@@ -9,8 +9,8 @@ Warning: still under development
 @author: Aki Ruhtinas, aki.ruhtinas@gmail.com
 """
 import sys
-from UI.pyDAQ_UI_v2_3 import realTimeGraph
-from Control_lib.NiDAQmx_control import DAQcontrol
+from UI.pyDAQ_UI_v3 import realTimeGraph
+from Control_lib.DAQ_lib import DAQ
 from Control_lib.instrument_control import *
 import nidaqmx
 from nidaqmx.constants import AcquisitionType ,LoggingMode, LoggingOperation, WaitMode
@@ -23,7 +23,9 @@ import numpy as np
 import multiprocessing as mp
 import traceback
 import warnings
-
+import logging
+import h5py
+import pandas as pd
 
 class pyDAQmeas():
     '''
@@ -70,7 +72,14 @@ class pyDAQmeas():
         self.Gv = 100
                 
         # Set up queues for communication
-        self.q0 = mp.Queue() # Queue for DAQ raw data
+        self.q00 = mp.Queue() # Queue for DAQ raw data
+        self.q01 = mp.Queue() # Queue for DAQ raw data
+        self.q02 = mp.Queue() # Queue for DAQ raw data
+        self.q03 = mp.Queue() # Queue for DAQ raw data
+        self.q04 = mp.Queue() # Queue for DAQ raw data
+
+        self.data_queues = [self.q00,self.q01,self.q02,self.q03,self.q04]
+        
         self.q1 = mp.Queue() # Queue for data communication
         self.q2 = mp.Queue() # Dictionary queue for metadata
         self.q3 = mp.Queue() # Queue for data logging
@@ -91,6 +100,9 @@ class pyDAQmeas():
         
         self.settingDict = {}
         self.devicelist = {}
+
+        self.DAQinterfaces = {}
+        self.DAQsettingDict = {}
         
         
         
@@ -256,10 +268,91 @@ class pyDAQmeas():
                 self.settingDict[chi] = {'Multiplier' : multip_chi,'Settings' : setting_chi}
                 # Handle parameter change
                 self.handleSettingDictChange(chi)
+
+            if 'DAQSettingDict' in measParamDict:
+                # Get parameters from input dictionary
+                setdict = measParamDict['DAQSettingDict']
+                setting_daqchi = setdict['Settings']
+                chi = setdict['Channel']
+                # Parse parameters to settingDict
+                self.DAQsettingDict[chi] = {'Settings' : setting_daqchi}
+                # Handle parameter change
+                self.handleDAQSettingDictChange(chi)
+
+            if 'DAQinterfaces' in measParamDict:
+                # Get DAQ interfaces from input dictionary
+                self.DAQ_interfaces = measParamDict['DAQinterfaces']
+
+            if 'DAQSettingDict' in measParamDict:
+                # Get parameters from input dictionary
+                setdict = measParamDict['DAQSettingDict']
+                setting_daqchi = setdict['Settings']
+                chi = setdict['Channel']
+                # Parse parameters to settingDict
+                self.DAQsettingDict[chi] = {'Settings' : setting_daqchi}
+                # Handle parameter change
+                self.handleDAQSettingDictChange(chi)
+
             # Get UUID for the measurement
             if 'UUID' in measParamDict:
                 self.uuid = measParamDict['UUID']
-                
+
+    def handleDAQSettingDictChange(self,channel):
+        '''
+        Method to handle event when DAQ settings are changed
+
+        Parameters
+        ----------
+        channel : str
+            DAQ whose settings has been modified
+
+        Returns
+        -------
+        None.
+
+        '''       
+        # Communicate device settings to the device
+        if self.DAQsettingDict[channel]['Settings']['Remote']:
+            # Check device type here
+            dev_name = self.DAQsettingDict[channel]['Settings']['Device']
+            conn_type = self.DAQsettingDict[channel]['Settings']['Connection type']
+            if conn_type == 'GPIB':
+                dev_gbip = self.DAQsettingDict[channel]['Settings']['GPIB channel']
+                            # Check if GPIB channel already exists and it is assigned to wanted device
+                if dev_gbip in self.devicelist and self.devicelist[dev_gbip]['Name'] == dev_name:
+                    # Apply settings to the device
+                    self.devicelist[dev_gbip]['Device'].apply_settings(self.DAQsettingDict[channel]['Settings'])
+                            # Device does not exist, so initialize new one
+                else: #!!! Write here own if clause for new device
+                    # Initialize AVS-47
+                    if dev_name == 'AVS-47':
+                        # Initalize AVS-47
+                        try:
+                            # Make AVS-47 device
+                            avs = AVS47(dev_gbip,0)
+                            # Apply settings       
+                            avs.apply_settings(self.DAQsettingDict[channel]['Settings'])
+                            # Add device to the devicelist
+                            self.devicelist[dev_gbip]= {'Device':avs,'Name':'AVS-47'}
+                        except Exception as e:
+                            traceback.print_exc()
+                            warnings.warn('Not able to connect to AVS-47')
+            elif conn_type.startswith('IP'):
+                if conn_type == 'IPv4 Address':
+                    dev_ip = self.DAQsettingDict[channel]['Settings']['IPv4 Address']
+                elif conn_type == 'IPv6 Address':
+                    dev_ip = self.DAQsettingDict[channel]['Settings']['IPv6 Address']
+                if dev_ip in self.devicelist and self.devicelist[dev_ip]['Name'] == dev_name:
+                    # Apply settings to the device
+                    self.devicelist[dev_ip]['Device'].apply_settings(self.DAQsettingDict[channel]['Settings'])
+                # Device does not exist, so initialize new one
+                else: #!!! Write here own if clause for new device
+                    pass
+            else:
+                warnings.warn('Unknown connection type for DAQ interface')
+                return
+
+
                          
     def handleSettingDictChange(self,channel):
         '''
@@ -275,8 +368,7 @@ class pyDAQmeas():
         None.
 
         '''
-        # Add 1 here because time is never multiplied
-        self.multips = [1]
+        self.multips = []
         # Iterate through the channels and extract channel multipliers
         for chi in self.channels:
             try:
@@ -312,8 +404,7 @@ class pyDAQmeas():
                         traceback.print_exc()
                         warnings.warn('Not able to connect to AVS-47')
         
-            
-    def processData(self,stop_event,q0,q1,q3,qr):
+    def processData(self,stop_event,used_queues,q1,q3,qr):
         '''
         process measured data and send it forward
 
@@ -322,26 +413,38 @@ class pyDAQmeas():
         None.
 
         '''
+        multipsdaq = {}
         # Initialize data arrays
-        if self.chunk_averaging:
-            output = np.zeros(shape=(self.N_logging,len(self.channels)+1))
-        else:
-            output = np.zeros(shape=(self.N_logging*self.Nsamples,len(self.channels)+1))
+        output = {}
+        outputm = {}
+        Nsm = {}
+        i_ch = 0
+        # Iterate through DAQ interfaces to get correct size for the data
+        for daqch in self.DAQsettingDict:
+            # Set up data arrays
+            if self.chunk_averaging:
+                Nch = len(self.DAQsettingDict[daqch]['Settings']['Channels'])
+                output[daqch] = np.zeros(shape = (self.N_logging,Nch+1))
+                outputm[daqch] = np.zeros(shape = (self.N_logging,Nch+1))
+            else:
+                Nch = len(self.DAQsettingDict[daqch]['Settings']['Channels'])
+                try:
+                    Nsmi = int(self.DAQsettingDict[daqch]['Settings']['Number of samples'])
+                except:
+                    Nsmi = 1
+                Nsm[daqch] = Nsmi
+                output[daqch] = np.zeros(shape = (self.N_logging*Nsmi,Nch+1))
+                outputm[daqch] = np.zeros(shape = (self.N_logging*Nsmi,Nch+1))
+            
+            # Construct multipliers and take time into account
+            multipsdaq[daqch] = [1] + self.multips[i_ch:i_ch + Nch]
+            if len(multipsdaq[daqch]) != Nch+1:
+                multipsdaq[daqch] = np.ones(len(multipsdaq[daqch]))
+            i_ch += Nch
+        
         # Infinite loop
-        multips = self.multips
-        print(multips)
-        # Select calibration function
-        # Currently available: [Dipstick','Morso','Ling','Kanada','Noiseless']
-        if self.therm_calib_name == 'Dipstick':
-            self.therm_calib = tc.calibration_dipstick
-        elif self.therm_calib_name == 'Morso':
-            self.therm_calib = tc.calibration_morso
-        elif self.therm_calib_name == 'Ling':
-            self.therm_calib = tc.calibration_Ling
-        elif self.therm_calib_name == 'Kanada':
-            self.therm_calib = tc.calibration_Kanada
-        else:
-            self.therm_calib = lambda x:x
+        print(f'Channel multipliers: {multipsdaq}')
+        self.therm_calib = lambda x:x
         # Column where thermometer data is
         thermcol = self.thermCh + 1
         # Start while loop
@@ -351,47 +454,74 @@ class pyDAQmeas():
                 multips = self.qr.get_nowait()
             # Read channel measurement data
             n_out = 0
+            data_received = [False for qi in used_queues]
             # Take data out of DAQ until desired amount of data is fetched
             while n_out < self.N_logging and not stop_event.is_set():
-                # Take all the data from queue
-                try:
-                    rawdataout = self.q0.get_nowait()
-                except:
+                # Take all the data from queues
+                for i,(daqch,qi) in enumerate(zip(used_queues.keys(),used_queues.values())):
+                    try:
+                        datain = qi.get_nowait()
+                        data_received[i] = True
+                    # If something happens in data extraction, change flag to false
+                    except Exception as e:
+                        data_received[i] = False
+                        continue
+                    try:
+                        # Calculate average for each channel
+                        if self.chunk_averaging:
+                            # Add one averaged row to output array
+                            output[daqch][n_out] = np.average(datain, axis=1)
+                        else:
+                            output[daqch][n_out*Nsm[daqch]:(n_out+1)*Nsm[daqch]] = np.transpose(datain)
+                        # Multiply output with channel multipliers
+                        outputm[daqch] = np.multiply(output[daqch],multipsdaq[daqch])
+                    except Exception as e:
+                        logging.info(f'Error occurred {e}')
+                # Check if there is incoming data in any of the queues
+                if not any(data_received):
+                    # Continue to next iteration if no data is received
                     continue
-                timestamp = rawdataout[0]
-                out = rawdataout[1]
-                # Calculate average for each channel
-                if self.chunk_averaging:
-                    # Add one row to output array
-                    output[n_out] = np.concatenate(([timestamp],np.average(out, axis=1)))
-                else:
-                    # Generate time array. Startpoint is the timestamp point and not hardware time, expect small deviation from real value
-                    timearr = timestamp - np.linspace(0,(1/self.sample_rate)*(self.Nsamples-1),self.Nsamples)
-                    # Add time as a first channel and put data to output array
-                    output[n_out*self.Nsamples:(n_out+1)*self.Nsamples] = np.transpose(np.concatenate(([timearr[::-1]],out)))
                 n_out += 1
             
-            # Multiply output with channel multipliers
-            outputm = np.multiply(output,multips)
             # Apply thermometer function to only one column of the data
-            if self.therm_calib_name != 'None':
-                try:
-                    outputm[:,thermcol] = np.apply_along_axis(self.therm_calib, 0, outputm[:,thermcol])
-                except:
-                    print('ERROR in temperature calculation')
+            #outputm[:,thermcol] = np.apply_along_axis(self.therm_calib, 0, outputm[:,thermcol])
             # Send data to datalogging queue with raw data without multiplication
             if self.rawdataout:
-                # Add raw data to output
-                dataout = np.concatenate((outputm,np.delete(output,0,axis=1)),axis=1)
+                # Send data to logging queue
+                q3.put({'Data':outputm,'rawdata':output})
             else:
-                dataout = outputm
-            # Send data to logging queue
-            q3.put(dataout)
+                q3.put({'Data':outputm})
+                
             # Send multiplied data to plotting queue
-            q1.put(dataout) #!!! Averaging again for plotting!
+            # Flatten the data
+            output_flatten = np.hstack([outputm[k] if k == 0 else outputm[k][:, 1:]
+                for k in sorted(outputm)
+            ])
+            print(output_flatten.shape)
+            q1.put(output_flatten) #!!! Averaging again for plotting!
         print('Data processing stopped')
         sys.exit()
-            
+
+    '''
+    def dataLogger(self,stop_event,q3):
+        while not stop_event.is_set():
+            # Iterate data queue until empty
+            while not self.q3.empty():
+                # Get data from measurement thread
+                data = self.q3.get_nowait()
+                df = pd.DataFrame(data)
+                print('Data received')
+                with pd.HDFStore(self.filename) as file:
+                    file.append(
+                        "Measurement",
+                        df,
+                        format="table",
+                        data_columns=True
+                    )
+        print('Logging stopped')
+        sys.exit()
+    '''
+
     def dataLogger(self,stop_event,q3):
         '''
         Log data to file in own process
@@ -425,6 +555,7 @@ class pyDAQmeas():
         None.
 
         '''
+        # Start data collection
         with open(self.fname,'a+') as f:
             # Write down unique identifier
             f.write('# UUID: '+str(self.uuid))
@@ -437,24 +568,53 @@ class pyDAQmeas():
                 for chi in self.channels:
                     f.write(chi + " ")
             f.write("\n")
-        # Start data collection
-        
         # initialize DAQ control class
-        daq = DAQcontrol(self.channels)
+        daq = DAQ()
 
-        # Start logging data to multiprocessing queue continuously
-        if self.testmode:
-            print('Testing mode on, no data acquisition')
-            measData = mp.Process(target = daq.continous_Nread_test,args = (stop_event,self.q0,self.sample_rate, self.Nsamples))
-        else:
-            measData = mp.Process(target = daq.continous_Nread,args = (stop_event,self.q0,self.sample_rate, self.Nsamples))
-        measData.start()
+        # Log same start time for all processes for syncing
+        starttime = time.perf_counter()
+
+        self.used_queues = {}
+        for daqch,daqi in zip(self.DAQ_interfaces.keys(), self.DAQ_interfaces.values()):
+            qi = self.data_queues[daqch]
+            settings = self.DAQsettingDict[daqch]['Settings']
+            mi = None
+            if self.testmode:
+                print('Testing mode on, no data acquisition')
+                mi = mp.Process(target = daq.continous_Nread_test,args = (stop_event,starttime,self.channels,qi,self.sample_rate, self.Nsamples))
+                break
+            elif daqi == 'Moku Go':
+                try:
+                    mi = mp.Process(target = daq.MokuGo_continuous_Nread,
+                                    args = (stop_event,starttime,qi,settings))
+                except Exception as e:
+                    print(f"Error occurred while initializing Moku Go: {e}")
+            elif daqi == 'NI DAQ':
+                mi = mp.Process(target = daq.NiDAQmx_continous_Nread,args = (stop_event,starttime,self.channels,qi,self.sample_rate, self.Nsamples))
+            elif daqi == 'AVS-47':
+                mi = mp.Process(target = daq.AVS47_continuous_read,args = (stop_event,starttime,qi,self.sample_rate, self.Nsamples))
+            else:
+                mi = None
+            # Add thread and queue to the list of used threads and queues
+            self.used_queues[daqch] = qi
+            # Start the data acquisition process
+            mi.start()
+            print(f"Started data acquisition for {daqi} on DAQ interface {daqch}")
+            print(f"Number of used queues: {len(self.used_queues)}")
+
         print('Data logging started')
+
         # Start processing thread
-        proData = mp.Process(target = self.processData,args = (stop_event,self.q0,self.q1,self.q3,self.qr))
-        proData.start()
-        print('Data processing started')
-        
+        try:
+            args = (stop_event,self.used_queues,self.q1,self.q3,self.qr)
+            proData = mp.Process(target = self.processData,
+                                args = args)
+            proData.start()
+            print('Data processing started')
+        except Exception as e:
+            traceback.print_exc()
+            logging.error(f"Error occurred while starting data processing: {e}")
+
         # Data logging thread
         logData = mp.Process(target = self.dataLogger,args = (stop_event,self.q3))
         logData.start()
@@ -515,8 +675,10 @@ if __name__ == '__main__':
         # Device name, change if needed
         #meas.daq_device_name = 'Dev1'
         meas.daq_device_name = 'Dev1'
+        meas.daq_device_name = 'MokuGo'
+        meas.moku_go_ip = '[fe80::7269:79ff:feb9:7b5c]'
         
-        meas.testmode = True
+        meas.testmode = False
 
         # Settling time, 10e-3 is good starting point
         meas.settling_time = 10e-3
@@ -538,7 +700,8 @@ if __name__ == '__main__':
         meas.defaultpathname = r""
         meas.filename = r'testing.data'
         meas.therm_multiplier = 1000
-        meas.channels=["Dev1/ai0","Dev1/ai1","Dev1/ai2"]
+        #meas.channels=["Dev1/ai0","Dev1/ai1","Dev1/ai2"]
+        meas.channels=["time","ch1","ch2"]
 
         
         # Start background and GUI threads
